@@ -55,8 +55,26 @@ impl AppPaths {
                 .join("Contents")
                 .join("MacOS")
                 .join("Cursor")
+        } else if cfg!(target_os = "linux") {
+            // Linux 下检查多个可能的路径
+            let possible_paths = [
+                PathBuf::from("/usr/bin/cursor"),
+                PathBuf::from("/usr/local/bin/cursor"),
+                PathBuf::from("/opt/cursor/cursor"),
+                PathBuf::from("/snap/bin/cursor"),
+                PathBuf::from("/home/zhenpeng/文档")
+            ];
+            
+            let found_path = possible_paths.iter().find(|path| path.exists());
+            match found_path {
+                Some(path) => path.clone(),
+                None => {
+                    // 如果找不到，默认使用 /usr/bin/cursor
+                    PathBuf::from("/usr/bin/cursor")
+                }
+            }
         } else {
-            PathBuf::from("/usr/bin/cursor")  // Linux 默认路径
+            PathBuf::from("/usr/bin/cursor")  // 默认路径
         };
 
         // 获取 cursor-updater 路径
@@ -99,13 +117,22 @@ impl AppPaths {
                 .join("out")
                 .join("main.js")
         } else {
-            // Linux 路径
-            PathBuf::from("/usr/lib")
-                .join("cursor")
-                .join("resources")
-                .join("app")
-                .join("out")
-                .join("main.js")
+            // Linux 路径，检查多个可能的位置
+            let possible_paths = [
+                PathBuf::from("/usr/lib/cursor/resources/app/out/main.js"),
+                PathBuf::from("/usr/share/cursor/resources/app/out/main.js"),
+                PathBuf::from("/opt/cursor/resources/app/out/main.js"),
+                PathBuf::from("/snap/cursor/current/resources/app/out/main.js")
+            ];
+            
+            let found_path = possible_paths.iter().find(|path| path.exists());
+            match found_path {
+                Some(path) => path.clone(),
+                None => {
+                    // 如果找不到，默认使用
+                    PathBuf::from("/usr/lib/cursor/resources/app/out/main.js")
+                }
+            }
         };
 
         let paths = Self {
@@ -141,9 +168,17 @@ impl AppPaths {
             return Err("Cursor 可执行文件不存在".to_string());
         }
 
-        std::process::Command::new(&self.cursor_exe)
-            .spawn()
-            .map_err(|e| format!("启动 Cursor 失败: {}", e))?;
+        let result = if cfg!(target_os = "linux") {
+            // Linux 系统可能需要特殊处理
+            std::process::Command::new(&self.cursor_exe)
+                .arg("--no-sandbox") // 添加 Linux 下可能需要的参数
+                .spawn()
+        } else {
+            std::process::Command::new(&self.cursor_exe)
+                .spawn()
+        };
+
+        result.map_err(|e| format!("启动 Cursor 失败: {}", e))?;
 
         Ok(())
     }
